@@ -175,11 +175,14 @@ find /etc/sysconfig/network-scripts -name "ifcfg-*" -not -name "ifcfg-lo" -print
 rm_if_exists "/etc/sysconfig/network-scripts/ifcfg-*.bak"
 
 
-# Regenerate machine-id (>= CentOS 7.1)
-echo "Regenerating machine id..."
+# Remove machine-id (>= CentOS 7.1)
+echo "Removing machine id..."
+
+# <=CentOS 8
+rm_if_exists "/var/lib/dbus/machine-id" 
 
 rm_if_exists "/etc/machine-id"
-systemd-machine-id-setup > /dev/null
+echo > /etc/machine-id
 
 
 # remove all user's command execution history.
