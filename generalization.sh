@@ -8,7 +8,7 @@
 # This script needs root privileges.
 # 
 #
-# Compatible with >=CentOS 7.1, =CentOS 8.x, =CentOS Stream 8
+# Compatible with >=CentOS/RHEL 7.1, =CentOS/RHEL 8.x, =CentOS Stream 8,9 =RHEL 9
 ###############################################
 
 ### declare functions ###
@@ -47,6 +47,7 @@ trap 'print_error $LINENO' ERR
 
 # Detect OS Version.
 OS_VERSION=$(cat /etc/redhat-release | sed -r "s/^.*release ([0-9]).*$/\1/")
+OS_DISTRI=$(cat /etc/redhat-release | sed -r "s/ release ([0-9]).*$//")
 
 
 #
@@ -94,7 +95,7 @@ echo "Cleaning up YUM cache files..."
 yum clean all > /dev/null
 
 
-#TODO: Enable working on CentOS 8.
+#TODO: Enable working on CentOS/RHEL 8.
 # Remove YUM transaction history（optional）
 #echo "Removing YUM transaction history..."
 
@@ -142,7 +143,7 @@ rm_if_exists "/root/anaconda-ks.cfg"
 #vgchange -u <vg-name>
 
 
-# Regenerate yum-uuid (exists only CentOS 7).
+# Regenerate yum-uuid (exists only CentOS/RHEL 7).
 echo "Removing uuid using for YUM..."
 
 rm_if_exists "/var/lib/yum/uuid"
@@ -170,19 +171,45 @@ hostnamectl set-hostname localhost.localdomain
 # Remove user-specific NIC configurations.
 echo "Removing user-specific NIC configurations..."
 
-sed -i '/^BOOTPROTO/c\BOOTPROTO="dhcp"' /etc/sysconfig/network-scripts/ifcfg-*
-find /etc/sysconfig/network-scripts -name "ifcfg-*" -not -name "ifcfg-lo" -print0 | xargs -0 --no-run-if-empty sed -i '/^\(HWADDR\|UUID\|HOSTNAME\|DHCP_HOSTNAME\|IPADDR\|PREFIX\|NETMASK\|GATEWAY\|DNS\)/d'
-rm_if_exists "/etc/sysconfig/network-scripts/ifcfg-*.bak"
+if [ $OS_VERSION -lt 9 ]; then 
+    sed -i '/^BOOTPROTO/c\BOOTPROTO="dhcp"' /etc/sysconfig/network-scripts/ifcfg-*
+    find /etc/sysconfig/network-scripts -name "ifcfg-*" -not -name "ifcfg-lo" -print0 | xargs -0 --no-run-if-empty sed -i '/^\(HWADDR\|UUID\|HOSTNAME\|DHCP_HOSTNAME\|IPADDR\|PREFIX\|NETMASK\|GATEWAY\|DNS\)/d'
+    rm_if_exists "/etc/sysconfig/network-scripts/ifcfg-*.bak"
+else
+    find /etc/NetworkManager/system-connections/ -name "ens*" -print0 | xargs -0 --no-run-if-empty sed -i '/^\(uuid\|address*\|dns\|dns-search\|method\)/d'
+    rm_if_exists "/etc/NetworkManager/system-connections/ens*.bak"
+fi
+
+rm_if_exists "/etc/udev/rules.d/70-persistent-*"
 
 
-# Remove machine-id (>= CentOS 7.1)
+# Remove machine-id (>= CentOS/RHEL 7.1)
 echo "Removing machine id..."
 
-# <=CentOS 8
+# <=CentOS/RHEL 8
 rm_if_exists "/var/lib/dbus/machine-id" 
 
 rm_if_exists "/etc/machine-id"
 echo > /etc/machine-id
+
+
+# Remove the iSCSI initiator settings
+echo "Removing the iSCSI initiator settings..."
+rm_if_exists "/etc/iscsi/initiatorname.iscsi"
+
+
+if [[  "$OS_DISTRI" =~ "Red Hat" ]]; then
+    # If the system is connected to Satellite
+    echo "Remove Satellite settings..."
+    yum remove -y katello-ca-consumer\*
+    rm_if_exists "/etc/rhsm/facts/katello.facts"
+
+    # Unregister the system from Red Hat
+    echo "Unregister the system from Red Hat..."
+    subscription-manager unregister
+    subscription-manager remove --all
+    subscription-manager clean
+fi
 
 
 # remove all user's command execution history.
