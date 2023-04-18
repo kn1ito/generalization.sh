@@ -191,6 +191,7 @@ rm_if_exists "/var/lib/dbus/machine-id"
 
 rm_if_exists "/etc/machine-id"
 echo > /etc/machine-id
+chmod 444 /etc/machine-id
 
 
 # Remove the iSCSI initiator settings
